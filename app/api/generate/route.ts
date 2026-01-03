@@ -1,81 +1,143 @@
 import { NextResponse } from "next/server";
+import { 
+  executePipeline, 
+  getTimingBreakdown,
+  type PackageId, 
+  type PipelineStageConfig,
+  type GenerateResponse,
+  type GenerateErrorResponse,
+} from "@/lib/pipeline";
+import { getDictionary } from "@/lib/contacts/storage";
 
-const SYSTEM_INSTRUCTION = `
-You are an expert technical writer. Convert raw meeting transcripts into beautifully formatted Markdown documents optimized for Notion.
-
-Formatting contract:
-- Use "# " for a clear title.
-- Use "## " for major sections and "### " for subsections.
-- Use "- [ ]" for action items (checkboxes).
-- Use "> " for key quotes (attribute speakers when possible).
-- Use short paragraphs, strong hierarchy, and plenty of whitespace.
-- Prefer bullet lists over long prose when summarizing.
-- Do NOT wrap the output in triple backticks or \`\`\`markdown fences.
-- Return only the final markdown.
-`;
+// -----------------------------------------------------------------------------
+// API Route: POST /api/generate
+// -----------------------------------------------------------------------------
 
 export async function POST(req: Request) {
   try {
+    // Validate API key
     if (!process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY === "your_api_key_here") {
-      return NextResponse.json(
-        { error: "OpenRouter API key is not configured. Please set OPENROUTER_API_KEY in .env.local" },
-        { status: 500 }
-      );
+      const errorResponse: GenerateErrorResponse = {
+        error: "OpenRouter API key is not configured. Please set OPENROUTER_API_KEY in .env.local",
+      };
+      return NextResponse.json(errorResponse, { status: 500 });
     }
 
-    const { transcript, model, templatePrompt } = await req.json();
+    // Parse request body
+    const body = await req.json();
+    const { 
+      transcript, 
+      packageId = "BALANCED_PRO", 
+      customConfig, 
+      templatePrompt = "",
+      metadata,
+    } = body as {
+      transcript?: string;
+      packageId?: PackageId;
+      customConfig?: PipelineStageConfig;
+      templatePrompt?: string;
+      metadata?: {
+        clientName?: string;
+        participants?: string[];
+        meetingName?: string;
+        date?: string;
+      };
+    };
 
-    if (!transcript || !model) {
-      return NextResponse.json({ error: "Missing transcript or model." }, { status: 400 });
+    // Validate transcript
+    if (!transcript) {
+      const errorResponse: GenerateErrorResponse = {
+        error: "Missing transcript",
+      };
+      return NextResponse.json(errorResponse, { status: 400 });
     }
 
     if (typeof transcript !== "string" || transcript.trim().length < 20) {
-      return NextResponse.json({ error: "Transcript looks empty." }, { status: 400 });
+      const errorResponse: GenerateErrorResponse = {
+        error: "Transcript is too short or invalid",
+      };
+      return NextResponse.json(errorResponse, { status: 400 });
     }
 
-    // soft guardrail: ~1.5MB
+    // Soft guardrail: ~1.5MB max
     if (transcript.length > 1_500_000) {
-      return NextResponse.json(
-        { error: "Transcript is too large. Split it into smaller chunks and try again." },
-        { status: 413 }
-      );
+      const errorResponse: GenerateErrorResponse = {
+        error: "Transcript is too large. Split it into smaller chunks and try again.",
+      };
+      return NextResponse.json(errorResponse, { status: 413 });
     }
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
-        "X-Title": "Scribe",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: SYSTEM_INSTRUCTION.trim() },
-          {
-            role: "user",
-            content: `TEMPLATE INSTRUCTIONS:\n${templatePrompt || ""}\n\nTRANSCRIPT:\n${transcript}`,
-          },
-        ],
-        temperature: 0.2,
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      return NextResponse.json(
-        { error: "OpenRouter request failed.", details: errText.slice(0, 2000) },
-        { status: 502 }
-      );
+    // Validate package ID
+    const validPackages: PackageId[] = ["TRUST_MAX", "BALANCED_PRO", "FAST_ELEGANT", "CUSTOM"];
+    if (!validPackages.includes(packageId)) {
+      const errorResponse: GenerateErrorResponse = {
+        error: `Invalid package ID. Must be one of: ${validPackages.join(", ")}`,
+      };
+      return NextResponse.json(errorResponse, { status: 400 });
     }
 
-    const data = await response.json();
-    const notes = data?.choices?.[0]?.message?.content ?? "";
+    // Validate custom config if using CUSTOM package
+    if (packageId === "CUSTOM" && !customConfig) {
+      const errorResponse: GenerateErrorResponse = {
+        error: "Custom configuration required when using CUSTOM package",
+      };
+      return NextResponse.json(errorResponse, { status: 400 });
+    }
 
-    return NextResponse.json({ notes });
+    // Fetch dictionary entries for transcription corrections
+    const dictionaryEntries = await getDictionary();
+    const dictionary = dictionaryEntries.map((d) => ({
+      incorrect: d.incorrect,
+      correct: d.correct,
+    }));
+
+    // Build enriched metadata with dictionary
+    const enrichedMetadata = {
+      ...metadata,
+      dictionary: dictionary.length > 0 ? dictionary : undefined,
+    };
+
+    // Execute the pipeline
+    const result = await executePipeline(
+      transcript,
+      packageId,
+      templatePrompt,
+      customConfig,
+      {}, // pipeline options
+      enrichedMetadata
+    );
+
+    // Handle pipeline failure
+    if (!result.success || !result.summary) {
+      const errorResponse: GenerateErrorResponse = {
+        error: result.error || "Pipeline execution failed",
+        stage: result.stage_results.extraction?.success === false ? "extraction" :
+               result.stage_results.deduplication?.success === false ? "deduplication" :
+               result.stage_results.synthesis?.success === false ? "synthesis" :
+               result.stage_results.validation?.success === false ? "validation" : undefined,
+      };
+      return NextResponse.json(errorResponse, { status: 502 });
+    }
+
+    // Get timing breakdown
+    const timing = getTimingBreakdown(result);
+
+    // Return successful response
+    const response: GenerateResponse = {
+      summary: result.summary,
+      confidence: result.confidence ?? 70,
+      validationFlags: result.validation_flags,
+      processingTime: timing,
+    };
+
+    return NextResponse.json(response);
+
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    console.error("Generate API error:", error);
+    const errorResponse: GenerateErrorResponse = {
+      error: "Internal Server Error",
+      details: error instanceof Error ? error.message : undefined,
+    };
+    return NextResponse.json(errorResponse, { status: 500 });
   }
 }
