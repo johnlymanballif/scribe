@@ -51,20 +51,35 @@ import * as fileStorage from "./file-storage";
 
 let storageMode: "postgres" | "file" | null = null;
 
+// Detect if we're in a serverless/production environment (Vercel)
+const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME || process.cwd() === "/var/task";
+
 async function detectStorageMode(): Promise<"postgres" | "file"> {
-  // Always return file storage if sql is not available
-  if (!sql) {
-    storageMode = "file";
-    return "file";
-  }
-  
   if (storageMode) {
     return storageMode;
   }
 
   // Check if POSTGRES_URL is set
   if (!process.env.POSTGRES_URL) {
-    console.log("⚠️  POSTGRES_URL not set, using file-based storage");
+    if (isServerless) {
+      // In production/serverless, Postgres is required
+      throw new Error("POSTGRES_URL is required in production. Please configure your database connection.");
+    }
+    console.log("⚠️  POSTGRES_URL not set, using file-based storage (local dev only)");
+    storageMode = "file";
+    return "file";
+  }
+
+  // In serverless environments, Postgres is required - don't fall back to file storage
+  if (isServerless && !sql) {
+    throw new Error("Postgres connection is required in production. Please check your POSTGRES_URL configuration.");
+  }
+
+  // Always return file storage if sql is not available (local dev only)
+  if (!sql) {
+    if (isServerless) {
+      throw new Error("Postgres SQL client not available. Please check your database configuration.");
+    }
     storageMode = "file";
     return "file";
   }
@@ -80,6 +95,11 @@ async function detectStorageMode(): Promise<"postgres" | "file"> {
     storageMode = "postgres";
     return "postgres";
   } catch (error) {
+    if (isServerless) {
+      // In production, don't fall back to file storage - throw the error
+      console.error("❌ Postgres connection failed in production:", error);
+      throw new Error(`Postgres connection failed: ${error instanceof Error ? error.message : String(error)}. Please check your POSTGRES_URL configuration.`);
+    }
     console.warn("⚠️  Postgres connection failed, falling back to file storage:", error);
     storageMode = "file";
     return "file";

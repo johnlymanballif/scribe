@@ -10,6 +10,12 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const CONTACTS_FILE = path.join(DATA_DIR, "contacts.json");
 
 async function ensureDataDir(): Promise<void> {
+  // Don't try to create directories in serverless environments
+  const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME || process.cwd() === "/var/task";
+  if (isServerless) {
+    throw new Error("File storage is not available in serverless environments. Please configure Postgres.");
+  }
+  
   try {
     await fs.access(DATA_DIR);
   } catch {
