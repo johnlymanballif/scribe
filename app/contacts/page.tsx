@@ -536,8 +536,15 @@ function CompaniesTab({
               handleCreateCompany();
             }
           }}
-          className="w-full px-4 py-2 bg-white border border-border/40 rounded-lg text-sm focus:ring-0 transition-colors"
+          className="w-full px-4 py-2 bg-white border border-border/40 rounded-lg text-sm focus:ring-0 transition-colors mb-3"
         />
+        <button
+          onClick={handleCreateCompany}
+          disabled={!newCompanyName.trim()}
+          className="w-full px-4 py-2 text-sm text-secondary hover:text-primary disabled:opacity-50 disabled:hover:text-secondary transition-colors"
+        >
+          Save Company
+        </button>
       </div>
 
       {/* Companies List */}
