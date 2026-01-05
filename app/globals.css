@@ -7,6 +7,48 @@ html, body {
 }
 
 body {
-  background: theme(colors.background);
-  color: theme(colors.primary);
+  background: theme('colors.background');
+  color: theme('colors.primary');
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Skip to main content link for screen readers */
+.skip-link {
+  @apply sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-white focus:rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary;
+}
+
+/* Accessible focus styles - visible but elegant */
+@layer components {
+  .input-invisible {
+    @apply w-full px-0 py-2.5 bg-transparent border-0 border-b border-transparent text-sm text-primary placeholder:text-tertiary;
+    @apply focus-visible:border-borderFocus focus:outline-none focus:ring-0 transition-colors;
+    @apply hover:border-borderSubtle;
+    min-height: 44px; /* Touch target size */
+  }
+  
+  .input-underline {
+    @apply w-full px-0 py-2.5 bg-transparent border-0 border-b border-border text-sm text-primary placeholder:text-tertiary;
+    @apply focus-visible:border-borderFocus focus:outline-none focus:ring-0 transition-colors;
+    min-height: 44px; /* Touch target size */
+  }
+  
+  /* Enhanced focus styles - darker border, no outline */
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none;
+    border-color: theme('colors.borderFocus');
+  }
+  
+  /* Button focus styles - darker border */
+  button:focus-visible {
+    outline: none;
+    border-color: theme('colors.borderFocus');
+  }
+  
+  /* Link focus styles - darker border */
+  a:focus-visible {
+    outline: none;
+  }
 }

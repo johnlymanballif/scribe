@@ -259,3 +259,5 @@ export function getExtractionPreview(result: ExtractJsonResult): string {
   return `Extracted via ${result.extractionMethod}: ${data.decisions.length} decisions, ${data.commitments.length} commitments, ${data.risks.length} risks`;
 }
 
+
+

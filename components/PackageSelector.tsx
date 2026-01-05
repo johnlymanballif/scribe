@@ -44,9 +44,9 @@ export default function PackageSelector({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Preset packages */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         {packages.map((pkg) => {
           const isSelected = pkg.id === selectedPackageId;
           const cost = calculatePipelineCost(pkg.stages);
@@ -60,34 +60,34 @@ export default function PackageSelector({
                 setIsCustomExpanded(false);
               }}
               className={[
-                "w-full text-left p-4 rounded-lg border transition-all duration-200",
+                "w-full text-left p-4 rounded-lg transition-all duration-200",
                 isSelected
-                  ? "bg-white border-accent/50 shadow-sm ring-1 ring-accent/20"
-                  : "bg-surface border-transparent hover:bg-surfaceHover hover:border-border",
+                  ? "bg-surface shadow-sm border border-border/40"
+                  : "bg-transparent hover:bg-surface/30",
               ].join(" ")}
             >
               {/* Header row */}
               <div className="flex justify-between items-start gap-3 mb-2">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
                   <PackageIcon packageId={pkg.id} />
-                  <span className="text-sm font-medium">{pkg.name}</span>
+                  <span className="text-sm font-medium text-primary">{pkg.name}</span>
                   <RiskBadge level={pkg.risk_level} />
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-[10px] text-tertiary font-mono">
                     ~${cost.total.toFixed(3)}
                   </span>
-                  {isSelected && <Check size={16} className="text-accent flex-shrink-0" />}
+                  {isSelected && <Check size={16} className="text-accent flex-shrink-0" strokeWidth={1.5} />}
                 </div>
               </div>
               
               {/* Description */}
-              <p className="text-xs text-secondary mb-3">
+              <p className="text-xs text-secondary mb-3 leading-relaxed">
                 {pkg.description}
               </p>
               
               {/* Model assignments */}
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-mono">
                 <ModelStageLabel 
                   stage="Extract" 
                   modelId={pkg.stages.extraction} 
@@ -107,13 +107,13 @@ export default function PackageSelector({
 
               {/* Use cases (when selected) */}
               {isSelected && pkg.use_cases.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-border/50">
-                  <div className="text-[10px] text-tertiary mb-1">Best for</div>
+                <div className="mt-3 pt-3 border-t border-borderSubtle">
+                  <div className="text-[10px] text-tertiary mb-1.5 uppercase tracking-wide">Best for</div>
                   <div className="flex flex-wrap gap-1.5">
                     {pkg.use_cases.map((useCase) => (
                       <span 
                         key={useCase} 
-                        className="text-[10px] text-secondary bg-surface px-2 py-0.5 rounded"
+                        className="text-[10px] text-secondary bg-surface/60 px-2 py-0.5 rounded"
                       >
                         {useCase}
                       </span>
@@ -127,7 +127,7 @@ export default function PackageSelector({
       </div>
 
       {/* Custom mode toggle */}
-      <div className="border-t border-border pt-4">
+      <div className="border-t border-borderSubtle pt-4 mt-4">
         <button
           type="button"
           onClick={() => {
@@ -140,31 +140,32 @@ export default function PackageSelector({
             }
           }}
           className={[
-            "w-full flex items-center justify-between p-3 rounded-lg border transition-all",
+            "w-full flex items-center justify-between p-4 rounded-lg transition-all",
             isCustomSelected
-              ? "bg-white border-accent/50 shadow-sm"
-              : "bg-surface border-transparent hover:bg-surfaceHover",
+              ? "bg-surface shadow-sm border border-border/40"
+              : "bg-transparent hover:bg-surface/30",
           ].join(" ")}
         >
-          <div className="flex items-center gap-2">
-            <svg className="w-4 h-4 text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+          <div className="flex items-center gap-2.5">
+            <svg className="w-4 h-4 text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
             </svg>
-            <span className="text-sm font-medium">Custom Pipeline</span>
+            <span className="text-sm font-medium text-primary">Custom Pipeline</span>
             {isCustomSelected && customRiskLevel && (
               <RiskBadge level={customRiskLevel} />
             )}
           </div>
           <ChevronDown 
             size={16} 
-            className={`text-tertiary transition-transform ${isCustomExpanded ? "rotate-180" : ""}`} 
+            className={`text-tertiary transition-transform ${isCustomExpanded ? "rotate-180" : ""}`}
+            strokeWidth={1.5}
           />
         </button>
 
         {/* Custom configuration */}
         {isCustomExpanded && (
-          <div className="mt-3 p-4 bg-white border border-border rounded-lg space-y-4 animate-in slide-in-from-top-2 duration-200">
-            <div className="text-xs text-tertiary">
+          <div className="mt-3 p-5 bg-surface/30 rounded-lg space-y-5 animate-in slide-in-from-top-2 duration-200">
+            <div className="text-xs text-tertiary leading-relaxed">
               Select a model for each pipeline stage. Validation is mandatory for non-Claude writers.
             </div>
             
@@ -189,7 +190,7 @@ export default function PackageSelector({
               onChange={(value) => onCustomConfigChange({ ...customConfig, validation: value })}
             />
 
-            <div className="pt-2 border-t border-border flex justify-between text-xs text-tertiary">
+            <div className="pt-3 border-t border-borderSubtle flex justify-between text-xs text-tertiary">
               <span>Estimated cost (1h meeting)</span>
               <span className="font-mono">${estimatedCost.total.toFixed(3)}</span>
             </div>
@@ -289,14 +290,14 @@ function StageModelSelect({
 
   return (
     <div>
-      <div className="flex justify-between items-baseline mb-1.5">
-        <label className="text-xs font-medium text-primary">{label}</label>
+      <div className="flex justify-between items-baseline mb-2">
+        <label className="text-xs font-medium text-secondary">{label}</label>
         <span className="text-[10px] text-tertiary">{description}</span>
       </div>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value as PipelineModelId)}
-        className="w-full px-3 py-2 text-sm bg-surface border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-accent/50"
+        className="w-full px-0 py-2 text-sm bg-white border-0 border-b border-border hover:border-borderSubtle focus:outline-none transition-colors"
       >
         {models.map((model) => (
           <option key={model.id} value={model.id}>
