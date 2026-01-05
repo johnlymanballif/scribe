@@ -84,12 +84,17 @@ export async function POST(req: Request) {
       return NextResponse.json(errorResponse, { status: 400 });
     }
 
-    // Fetch dictionary entries for transcription corrections
-    const dictionaryEntries = await getDictionary();
-    const dictionary = dictionaryEntries.map((d) => ({
-      incorrect: d.incorrect,
-      correct: d.correct,
-    }));
+    // Fetch dictionary entries for transcription corrections (optional - gracefully handle DB errors)
+    let dictionary: { incorrect: string; correct: string }[] = [];
+    try {
+      const dictionaryEntries = await getDictionary();
+      dictionary = dictionaryEntries.map((d) => ({
+        incorrect: d.incorrect,
+        correct: d.correct,
+      }));
+    } catch (dbError) {
+      console.warn("Dictionary fetch failed (database unavailable), continuing without corrections:", dbError);
+    }
 
     // Build enriched metadata with dictionary
     const enrichedMetadata = {

@@ -1,0 +1,4 @@
+{"location":"app/contacts/page.tsx:76","message":"handleCreateCompany entry","data":{"name":"Mister"},"timestamp":1767633153444,"sessionId":"debug-session","runId":"run1","hypothesisId":"B,E"}
+{"location":"app/contacts/page.tsx:80","message":"handleCreateCompany fetch call","data":{"name":"Mister"},"timestamp":1767633153444,"sessionId":"debug-session","runId":"run1","hypothesisId":"E"}
+{"location":"app/contacts/page.tsx:89","message":"handleCreateCompany response received","data":{"status":500,"statusText":"","ok":false},"timestamp":1767633153598,"sessionId":"debug-session","runId":"run1","hypothesisId":"B,E"}
+{"location":"app/contacts/page.tsx:96","message":"handleCreateCompany response not ok","data":{"status":500,"error":"ENOENT: no such file or directory, mkdir '/var/task/data'"},"timestamp":1767633153598,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"}
