@@ -1,47 +1,24 @@
-import { promises as fs } from "fs";
-import path from "path";
+import { sql } from "@vercel/postgres";
 import type { Company, Person, DictionaryEntry, ContactsData } from "./types";
+import { runMigrations } from "./migrations";
 
 // -----------------------------------------------------------------------------
-// Storage Configuration
+// Database Initialization
 // -----------------------------------------------------------------------------
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const CONTACTS_FILE = path.join(DATA_DIR, "contacts.json");
+let migrationsRun = false;
 
-// -----------------------------------------------------------------------------
-// Helper Functions
-// -----------------------------------------------------------------------------
-
-async function ensureDataDir(): Promise<void> {
-  try {
-    await fs.access(DATA_DIR);
-  } catch {
-    await fs.mkdir(DATA_DIR, { recursive: true });
+async function ensureMigrations(): Promise<void> {
+  if (!migrationsRun) {
+    try {
+      await runMigrations();
+      migrationsRun = true;
+    } catch (error) {
+      console.error("Failed to run migrations:", error);
+      // Continue anyway - migrations might already be run
+      migrationsRun = true;
+    }
   }
-}
-
-async function readContactsFile(): Promise<ContactsData> {
-  await ensureDataDir();
-  
-  try {
-    const content = await fs.readFile(CONTACTS_FILE, "utf-8");
-    const data = JSON.parse(content);
-    // Ensure dictionary array exists for backwards compatibility
-    return {
-      companies: data.companies || [],
-      people: data.people || [],
-      dictionary: data.dictionary || [],
-    };
-  } catch (error) {
-    // File doesn't exist, return empty data
-    return { companies: [], people: [], dictionary: [] };
-  }
-}
-
-async function writeContactsFile(data: ContactsData): Promise<void> {
-  await ensureDataDir();
-  await fs.writeFile(CONTACTS_FILE, JSON.stringify(data, null, 2), "utf-8");
 }
 
 // -----------------------------------------------------------------------------
@@ -49,61 +26,105 @@ async function writeContactsFile(data: ContactsData): Promise<void> {
 // -----------------------------------------------------------------------------
 
 export async function getCompanies(): Promise<Company[]> {
-  const data = await readContactsFile();
-  return data.companies;
+  await ensureMigrations();
+  const result = await sql`
+    SELECT id, name, created_at, updated_at
+    FROM companies
+    ORDER BY created_at DESC
+  `;
+  
+  return result.rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
 }
 
 export async function getCompanyById(id: string): Promise<Company | null> {
-  const companies = await getCompanies();
-  return companies.find((c) => c.id === id) || null;
+  await ensureMigrations();
+  const result = await sql`
+    SELECT id, name, created_at, updated_at
+    FROM companies
+    WHERE id = ${id}
+    LIMIT 1
+  `;
+  
+  if (result.rows.length === 0) {
+    return null;
+  }
+  
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    name: row.name,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 export async function createCompany(name: string): Promise<Company> {
-  const data = await readContactsFile();
+  await ensureMigrations();
   const now = new Date().toISOString();
+  const id = `company_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
-  const company: Company = {
-    id: `company_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+  await sql`
+    INSERT INTO companies (id, name, created_at, updated_at)
+    VALUES (${id}, ${name.trim()}, ${now}, ${now})
+  `;
+  
+  return {
+    id,
     name: name.trim(),
     createdAt: now,
     updatedAt: now,
   };
-  
-  data.companies.push(company);
-  await writeContactsFile(data);
-  return company;
 }
 
 export async function updateCompany(id: string, name: string): Promise<Company> {
-  const data = await readContactsFile();
-  const company = data.companies.find((c) => c.id === id);
+  await ensureMigrations();
+  const now = new Date().toISOString();
   
-  if (!company) {
+  const result = await sql`
+    UPDATE companies
+    SET name = ${name.trim()}, updated_at = ${now}
+    WHERE id = ${id}
+    RETURNING id, name, created_at, updated_at
+  `;
+  
+  if (result.rows.length === 0) {
     throw new Error(`Company with id ${id} not found`);
   }
   
-  company.name = name.trim();
-  company.updatedAt = new Date().toISOString();
-  
-  await writeContactsFile(data);
-  return company;
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    name: row.name,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 export async function deleteCompany(id: string): Promise<void> {
-  const data = await readContactsFile();
-  
-  // Remove company from companies array
-  data.companies = data.companies.filter((c) => c.id !== id);
+  await ensureMigrations();
   
   // Remove company assignment from people
-  data.people = data.people.map((p) => {
-    if (p.companyId === id) {
-      return { ...p, companyId: undefined };
-    }
-    return p;
-  });
+  await sql`
+    UPDATE people
+    SET company_id = NULL
+    WHERE company_id = ${id}
+  `;
   
-  await writeContactsFile(data);
+  // Delete the company
+  const result = await sql`
+    DELETE FROM companies
+    WHERE id = ${id}
+    RETURNING id
+  `;
+  
+  if (result.rows.length === 0) {
+    throw new Error(`Company with id ${id} not found`);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -111,13 +132,45 @@ export async function deleteCompany(id: string): Promise<void> {
 // -----------------------------------------------------------------------------
 
 export async function getPeople(): Promise<Person[]> {
-  const data = await readContactsFile();
-  return data.people;
+  await ensureMigrations();
+  const result = await sql`
+    SELECT id, name, title, company_id, created_at, updated_at
+    FROM people
+    ORDER BY created_at DESC
+  `;
+  
+  return result.rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    title: row.title || undefined,
+    companyId: row.company_id || undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
 }
 
 export async function getPersonById(id: string): Promise<Person | null> {
-  const people = await getPeople();
-  return people.find((p) => p.id === id) || null;
+  await ensureMigrations();
+  const result = await sql`
+    SELECT id, name, title, company_id, created_at, updated_at
+    FROM people
+    WHERE id = ${id}
+    LIMIT 1
+  `;
+  
+  if (result.rows.length === 0) {
+    return null;
+  }
+  
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    name: row.name,
+    title: row.title || undefined,
+    companyId: row.company_id || undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 export async function createPerson(
@@ -125,29 +178,39 @@ export async function createPerson(
   title?: string,
   companyId?: string
 ): Promise<Person> {
-  const data = await readContactsFile();
-  const now = new Date().toISOString();
+  await ensureMigrations();
   
   // Validate companyId if provided
   if (companyId) {
-    const companyExists = data.companies.some((c) => c.id === companyId);
+    const companyExists = await getCompanyById(companyId);
     if (!companyExists) {
       throw new Error(`Company with id ${companyId} not found`);
     }
   }
   
-  const person: Person = {
-    id: `person_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+  const now = new Date().toISOString();
+  const id = `person_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  await sql`
+    INSERT INTO people (id, name, title, company_id, created_at, updated_at)
+    VALUES (
+      ${id},
+      ${name.trim()},
+      ${title?.trim() || null},
+      ${companyId || null},
+      ${now},
+      ${now}
+    )
+  `;
+  
+  return {
+    id,
     name: name.trim(),
     title: title?.trim(),
     companyId,
     createdAt: now,
     updatedAt: now,
   };
-  
-  data.people.push(person);
-  await writeContactsFile(data);
-  return person;
 }
 
 export async function updatePerson(
@@ -156,34 +219,55 @@ export async function updatePerson(
   title?: string,
   companyId?: string
 ): Promise<Person> {
-  const data = await readContactsFile();
-  const person = data.people.find((p) => p.id === id);
-  
-  if (!person) {
-    throw new Error(`Person with id ${id} not found`);
-  }
+  await ensureMigrations();
   
   // Validate companyId if provided
   if (companyId) {
-    const companyExists = data.companies.some((c) => c.id === companyId);
+    const companyExists = await getCompanyById(companyId);
     if (!companyExists) {
       throw new Error(`Company with id ${companyId} not found`);
     }
   }
   
-  person.name = name.trim();
-  person.title = title?.trim();
-  person.companyId = companyId;
-  person.updatedAt = new Date().toISOString();
+  const now = new Date().toISOString();
   
-  await writeContactsFile(data);
-  return person;
+  const result = await sql`
+    UPDATE people
+    SET name = ${name.trim()},
+        title = ${title?.trim() || null},
+        company_id = ${companyId || null},
+        updated_at = ${now}
+    WHERE id = ${id}
+    RETURNING id, name, title, company_id, created_at, updated_at
+  `;
+  
+  if (result.rows.length === 0) {
+    throw new Error(`Person with id ${id} not found`);
+  }
+  
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    name: row.name,
+    title: row.title || undefined,
+    companyId: row.company_id || undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 export async function deletePerson(id: string): Promise<void> {
-  const data = await readContactsFile();
-  data.people = data.people.filter((p) => p.id !== id);
-  await writeContactsFile(data);
+  await ensureMigrations();
+  
+  const result = await sql`
+    DELETE FROM people
+    WHERE id = ${id}
+    RETURNING id
+  `;
+  
+  if (result.rows.length === 0) {
+    throw new Error(`Person with id ${id} not found`);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -191,33 +275,65 @@ export async function deletePerson(id: string): Promise<void> {
 // -----------------------------------------------------------------------------
 
 export async function getDictionary(): Promise<DictionaryEntry[]> {
-  const data = await readContactsFile();
-  return data.dictionary;
+  await ensureMigrations();
+  const result = await sql`
+    SELECT id, incorrect, correct, created_at, updated_at
+    FROM dictionary
+    ORDER BY created_at DESC
+  `;
+  
+  return result.rows.map((row) => ({
+    id: row.id,
+    incorrect: row.incorrect,
+    correct: row.correct,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
 }
 
 export async function getDictionaryEntryById(id: string): Promise<DictionaryEntry | null> {
-  const dictionary = await getDictionary();
-  return dictionary.find((d) => d.id === id) || null;
+  await ensureMigrations();
+  const result = await sql`
+    SELECT id, incorrect, correct, created_at, updated_at
+    FROM dictionary
+    WHERE id = ${id}
+    LIMIT 1
+  `;
+  
+  if (result.rows.length === 0) {
+    return null;
+  }
+  
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    incorrect: row.incorrect,
+    correct: row.correct,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 export async function createDictionaryEntry(
   incorrect: string,
   correct: string
 ): Promise<DictionaryEntry> {
-  const data = await readContactsFile();
+  await ensureMigrations();
   const now = new Date().toISOString();
+  const id = `dict_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
-  const entry: DictionaryEntry = {
-    id: `dict_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+  await sql`
+    INSERT INTO dictionary (id, incorrect, correct, created_at, updated_at)
+    VALUES (${id}, ${incorrect.trim()}, ${correct.trim()}, ${now}, ${now})
+  `;
+  
+  return {
+    id,
     incorrect: incorrect.trim(),
     correct: correct.trim(),
     createdAt: now,
     updatedAt: now,
   };
-  
-  data.dictionary.push(entry);
-  await writeContactsFile(data);
-  return entry;
 }
 
 export async function updateDictionaryEntry(
@@ -225,25 +341,44 @@ export async function updateDictionaryEntry(
   incorrect: string,
   correct: string
 ): Promise<DictionaryEntry> {
-  const data = await readContactsFile();
-  const entry = data.dictionary.find((d) => d.id === id);
+  await ensureMigrations();
+  const now = new Date().toISOString();
   
-  if (!entry) {
+  const result = await sql`
+    UPDATE dictionary
+    SET incorrect = ${incorrect.trim()},
+        correct = ${correct.trim()},
+        updated_at = ${now}
+    WHERE id = ${id}
+    RETURNING id, incorrect, correct, created_at, updated_at
+  `;
+  
+  if (result.rows.length === 0) {
     throw new Error(`Dictionary entry with id ${id} not found`);
   }
   
-  entry.incorrect = incorrect.trim();
-  entry.correct = correct.trim();
-  entry.updatedAt = new Date().toISOString();
-  
-  await writeContactsFile(data);
-  return entry;
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    incorrect: row.incorrect,
+    correct: row.correct,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 export async function deleteDictionaryEntry(id: string): Promise<void> {
-  const data = await readContactsFile();
-  data.dictionary = data.dictionary.filter((d) => d.id !== id);
-  await writeContactsFile(data);
+  await ensureMigrations();
+  
+  const result = await sql`
+    DELETE FROM dictionary
+    WHERE id = ${id}
+    RETURNING id
+  `;
+  
+  if (result.rows.length === 0) {
+    throw new Error(`Dictionary entry with id ${id} not found`);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -251,6 +386,16 @@ export async function deleteDictionaryEntry(id: string): Promise<void> {
 // -----------------------------------------------------------------------------
 
 export async function getAllContacts(): Promise<ContactsData> {
-  return await readContactsFile();
+  await ensureMigrations();
+  const [companies, people, dictionary] = await Promise.all([
+    getCompanies(),
+    getPeople(),
+    getDictionary(),
+  ]);
+  
+  return {
+    companies,
+    people,
+    dictionary,
+  };
 }
-

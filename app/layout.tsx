@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Fragment_Mono } from "next/font/google";
 import "./globals.css";
 import Navigation from "@/components/Navigation";
+import PasswordWall from "@/components/PasswordWall";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -23,11 +24,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={inter.variable + " " + fragmentMono.variable + " font-sans"}>
-        <a href="#main-content" className="skip-link">
-          Skip to main content
-        </a>
-        <Navigation />
-        {children}
+        <PasswordWall>
+          <a href="#main-content" className="skip-link">
+            Skip to main content
+          </a>
+          <Navigation />
+          {children}
+        </PasswordWall>
       </body>
     </html>
   );
