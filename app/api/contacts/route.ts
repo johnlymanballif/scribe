@@ -45,7 +45,7 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as CreateContactRequest;
     // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/api/contacts/route.ts:44',message:'POST body parsed',data:{type:body.type,name:body.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/api/contacts/route.ts:44',message:'POST body parsed',data:{type:body.type,name:(body as any).name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B'})}).catch(()=>{});
     // #endregion
 
     if (body.type === "company") {
