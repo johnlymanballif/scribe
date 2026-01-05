@@ -74,9 +74,15 @@ export default function ContactBookPage() {
   }, []);
 
   const handleCreateCompany = async () => {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/contacts/page.tsx:76',message:'handleCreateCompany entry',data:{name:newCompanyName},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,E'})}).catch(()=>{});
+    // #endregion
     if (!newCompanyName.trim()) return;
 
     try {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/contacts/page.tsx:80',message:'handleCreateCompany fetch call',data:{name:newCompanyName.trim()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
       const response = await fetch("/api/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -85,14 +91,29 @@ export default function ContactBookPage() {
           name: newCompanyName.trim(),
         }),
       });
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/contacts/page.tsx:89',message:'handleCreateCompany response received',data:{status:response.status,statusText:response.statusText,ok:response.ok},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,E'})}).catch(()=>{});
+      // #endregion
 
       if (response.ok) {
         const company = await response.json();
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/contacts/page.tsx:92',message:'handleCreateCompany success',data:{companyId:company.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         setCompanies([...companies, company]);
         setNewCompanyName("");
+      } else {
+        const errorData = await response.json().catch(()=>({}));
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/contacts/page.tsx:96',message:'handleCreateCompany response not ok',data:{status:response.status,error:errorData.error},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
+        alert(`Failed to create company: ${errorData.error || response.statusText}`);
       }
     } catch (error) {
       console.error("Error creating company:", error);
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/contacts/page.tsx:99',message:'handleCreateCompany exception',data:{errorMessage:error instanceof Error ? error.message : String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
       alert("Failed to create company");
     }
   };
@@ -147,9 +168,15 @@ export default function ContactBookPage() {
   };
 
   const handleCreatePerson = async () => {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/contacts/page.tsx:149',message:'handleCreatePerson entry',data:{name:newPerson.name,companyId:newPerson.companyId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,E'})}).catch(()=>{});
+    // #endregion
     if (!newPerson.name.trim()) return;
 
     try {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/contacts/page.tsx:153',message:'handleCreatePerson fetch call',data:{name:newPerson.name.trim(),companyId:newPerson.companyId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
       const response = await fetch("/api/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -160,14 +187,29 @@ export default function ContactBookPage() {
           companyId: newPerson.companyId || undefined,
         }),
       });
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/contacts/page.tsx:164',message:'handleCreatePerson response received',data:{status:response.status,statusText:response.statusText,ok:response.ok},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,E'})}).catch(()=>{});
+      // #endregion
 
       if (response.ok) {
         const person = await response.json();
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/contacts/page.tsx:167',message:'handleCreatePerson success',data:{personId:person.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         setPeople([...people, person]);
         setNewPerson({ name: "", title: "", companyId: "" });
+      } else {
+        const errorData = await response.json().catch(()=>({}));
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/contacts/page.tsx:171',message:'handleCreatePerson response not ok',data:{status:response.status,error:errorData.error},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
+        alert(`Failed to create person: ${errorData.error || response.statusText}`);
       }
     } catch (error) {
       console.error("Error creating person:", error);
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/contacts/page.tsx:175',message:'handleCreatePerson exception',data:{errorMessage:error instanceof Error ? error.message : String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
       alert("Failed to create person");
     }
   };

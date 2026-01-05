@@ -1,4 +1,30 @@
-import { sql } from "@vercel/postgres";
+// Use pg library for Supabase, @vercel/postgres for Vercel Postgres
+let sql: any = null;
+
+const isSupabaseConnection = process.env.POSTGRES_URL?.includes("supabase.co") || 
+                             process.env.POSTGRES_URL?.includes("pooler.supabase.com");
+
+if (isSupabaseConnection) {
+  const { Pool } = require("pg");
+  const pool = new Pool({
+    connectionString: process.env.POSTGRES_URL,
+  });
+  
+  sql = (strings: TemplateStringsArray, ...values: any[]) => {
+    let query = strings[0];
+    const params: any[] = [];
+    for (let i = 0; i < values.length; i++) {
+      params.push(values[i]);
+      query += `$${params.length}` + strings[i + 1];
+    }
+    return pool.query(query, params).then((result: any) => ({
+      rows: result.rows,
+    }));
+  };
+} else {
+  const postgres = require("@vercel/postgres");
+  sql = postgres.sql;
+}
 
 // -----------------------------------------------------------------------------
 // Database Schema Migration
