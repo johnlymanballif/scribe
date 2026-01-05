@@ -52,10 +52,6 @@ import * as fileStorage from "./file-storage";
 let storageMode: "postgres" | "file" | null = null;
 
 async function detectStorageMode(): Promise<"postgres" | "file"> {
-  // #region agent log
-  fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/contacts/storage.ts:12',message:'detectStorageMode entry',data:{currentMode:storageMode,hasPostgresUrl:!!process.env.POSTGRES_URL,hasSql:!!sql},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
-  // #endregion
-  
   // Always return file storage if sql is not available
   if (!sql) {
     storageMode = "file";
@@ -63,43 +59,28 @@ async function detectStorageMode(): Promise<"postgres" | "file"> {
   }
   
   if (storageMode) {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/contacts/storage.ts:14',message:'Using cached storage mode',data:{mode:storageMode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     return storageMode;
   }
 
   // Check if POSTGRES_URL is set
   if (!process.env.POSTGRES_URL) {
     console.log("⚠️  POSTGRES_URL not set, using file-based storage");
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/contacts/storage.ts:19',message:'No POSTGRES_URL, using file storage',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     storageMode = "file";
     return "file";
   }
 
   // Try to connect to Postgres - wrap everything in try-catch to ensure we never throw
   try {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/contacts/storage.ts:26',message:'Attempting Postgres connection',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
-    // #endregion
     if (!sql) {
       throw new Error("Postgres SQL client not available");
     }
     await sql`SELECT 1`;
     await runMigrations();
     console.log("✅ Using Postgres database");
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/contacts/storage.ts:29',message:'Postgres connection succeeded',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     storageMode = "postgres";
     return "postgres";
   } catch (error) {
     console.warn("⚠️  Postgres connection failed, falling back to file storage:", error);
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/contacts/storage.ts:33',message:'Postgres connection failed, using file fallback',data:{errorMessage:error instanceof Error ? error.message : String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
-    // #endregion
     storageMode = "file";
     return "file";
   }
@@ -164,13 +145,7 @@ export async function getCompanyById(id: string): Promise<Company | null> {
 }
 
 export async function createCompany(name: string): Promise<Company> {
-  // #region agent log
-  fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/contacts/storage.ts:86',message:'createCompany entry',data:{name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C,D'})}).catch(()=>{});
-  // #endregion
   const mode = await detectStorageMode();
-  // #region agent log
-  fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/contacts/storage.ts:88',message:'createCompany storage mode detected',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
-  // #endregion
   if (mode === "postgres" && sql) {
     try {
       const now = new Date().toISOString();
@@ -181,9 +156,6 @@ export async function createCompany(name: string): Promise<Company> {
         VALUES (${id}, ${name.trim()}, ${now}, ${now})
       `;
       
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/contacts/storage.ts:100',message:'createCompany postgres insert succeeded',data:{id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       return {
         id,
         name: name.trim(),
@@ -195,9 +167,6 @@ export async function createCompany(name: string): Promise<Company> {
       // Fall through to file storage
     }
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/contacts/storage.ts:107',message:'createCompany using file storage',data:{name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-  // #endregion
   return fileStorage.createCompany(name);
 }
 
@@ -328,20 +297,11 @@ export async function createPerson(
   title?: string,
   companyId?: string
 ): Promise<Person> {
-  // #region agent log
-  fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/contacts/storage.ts:176',message:'createPerson entry',data:{name,companyId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C,D'})}).catch(()=>{});
-  // #endregion
   const mode = await detectStorageMode();
-  // #region agent log
-  fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/contacts/storage.ts:179',message:'createPerson storage mode detected',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
-  // #endregion
   
   if (companyId) {
     const companyExists = await getCompanyById(companyId);
     if (!companyExists) {
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/contacts/storage.ts:184',message:'createPerson company validation failed',data:{companyId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       throw new Error(`Company with id ${companyId} not found`);
     }
   }
@@ -376,9 +336,6 @@ export async function createPerson(
       // Fall through to file storage
     }
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7243/ingest/d8fe9982-be51-4975-89a7-147631832a9b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/contacts/storage.ts:213',message:'createPerson using file storage',data:{name,companyId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-  // #endregion
   return fileStorage.createPerson(name, title, companyId);
 }
 
