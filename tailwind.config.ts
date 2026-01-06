@@ -16,6 +16,7 @@ const config: Config = {
       colors: {
         background: "#FAF9F7",
         surface: "#F7F6F4",
+        surfaceDark: "#F0EFED",
         surfaceHover: "#F1F0EE",
 
         // Improved contrast for accessibility (WCAG AA compliant)

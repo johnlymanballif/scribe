@@ -474,7 +474,7 @@ function ScribeSection({
                   <h2 className="text-sm font-medium text-secondary mb-4">
                     Output Template
                   </h2>
-                  <div className="flex gap-2 overflow-x-auto pb-2">
+                  <div className="flex flex-wrap gap-2">
                     {TEMPLATES.map((t) => {
                       const selected = t.id === selectedTemplateId;
                       return (
@@ -485,7 +485,7 @@ function ScribeSection({
                             "px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-all",
                             selected
                               ? "bg-primary text-white"
-                              : "bg-surface hover:bg-surfaceHover text-secondary",
+                              : "bg-surfaceDark hover:bg-surfaceHover text-secondary",
                           ].join(" ")}
                         >
                           {t.name}
@@ -497,7 +497,7 @@ function ScribeSection({
                     <summary className="text-xs text-tertiary cursor-pointer hover:text-secondary transition-colors">
                       View template instructions
                     </summary>
-                    <pre className="mt-3 p-4 bg-surface rounded-lg text-xs text-secondary whitespace-pre-wrap font-mono max-h-48 overflow-y-auto leading-relaxed">
+                    <pre className="mt-3 p-4 bg-surfaceDark rounded-lg text-xs text-secondary whitespace-pre-wrap font-mono max-h-48 overflow-y-auto leading-relaxed">
                       {selectedTemplate.prompt}
                     </pre>
                   </details>
