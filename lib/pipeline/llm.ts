@@ -35,17 +35,18 @@ interface OpenRouterResponse {
 // Timeout Configuration
 // -----------------------------------------------------------------------------
 
-// Reasoning models (like DeepSeek R1) need longer timeouts
+// Model timeouts - kept short to fit within Vercel Hobby 60s limit
+// Total pipeline needs to complete in ~55s, so each stage ~12-15s max
 const MODEL_TIMEOUTS: Record<string, number> = {
-  "deepseek/deepseek-r1": 120_000, // 2 minutes for reasoning model
-  "anthropic/claude-sonnet-4": 90_000,
-  "anthropic/claude-haiku-4": 60_000,
-  "openai/gpt-4o": 90_000,
-  "google/gemini-2.5-flash": 60_000,
-  "moonshotai/kimi-k2": 60_000,
+  "deepseek/deepseek-r1": 45_000, // 45s for reasoning model
+  "anthropic/claude-sonnet-4": 30_000, // 30s
+  "anthropic/claude-haiku-4": 20_000, // 20s (fast model)
+  "openai/gpt-4o": 30_000, // 30s
+  "google/gemini-2.5-flash": 20_000, // 20s (fast model)
+  "moonshotai/kimi-k2": 30_000, // 30s
 };
 
-const DEFAULT_TIMEOUT = 90_000; // 90 seconds default
+const DEFAULT_TIMEOUT = 30_000; // 30 seconds default
 
 // -----------------------------------------------------------------------------
 // OpenRouter API Call

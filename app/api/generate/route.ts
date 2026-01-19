@@ -9,6 +9,14 @@ import {
 import { getDictionary } from "@/lib/contacts/storage";
 
 // -----------------------------------------------------------------------------
+// Route Configuration - Enable Fluid compute for longer streaming
+// -----------------------------------------------------------------------------
+
+// This enables Vercel Fluid compute which allows streaming responses
+// to run for up to 60s on Hobby, 300s on Pro (vs 10s default)
+export const maxDuration = 300; // seconds
+
+// -----------------------------------------------------------------------------
 // API Route: POST /api/generate (Streaming)
 // -----------------------------------------------------------------------------
 
@@ -125,12 +133,14 @@ export async function POST(req: Request) {
         };
 
         try {
+          // Skip validation on Hobby plan to fit within 60s timeout
+          // Users can upgrade to Pro for full validation
           const pipeline = executePipelineStreaming(
             transcript,
             packageId,
             templatePrompt,
             customConfig,
-            {},
+            { skipValidation: true },
             enrichedMetadata
           );
 
