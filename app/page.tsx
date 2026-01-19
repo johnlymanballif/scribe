@@ -79,7 +79,8 @@ export default function MeetingNotesApp() {
   
   // Processing state
   const [isGenerating, setIsGenerating] = useState(false);
-  
+  const [currentPipelineStage, setCurrentPipelineStage] = useState<"extraction" | "deduplication" | "synthesis" | "validation" | "complete" | null>(null);
+
   // Result state
   const [result, setResult] = useState<PipelineResult | null>(null);
 
@@ -131,6 +132,7 @@ export default function MeetingNotesApp() {
   const generateNotes = async () => {
     setIsGenerating(true);
     setResult(null);
+    setCurrentPipelineStage("extraction");
 
     try {
       const response = await fetch("/api/generate", {
@@ -150,34 +152,72 @@ export default function MeetingNotesApp() {
         }),
       });
 
-      const data = await response.json();
-      
       if (!response.ok) {
+        // Non-streaming error response
+        const data = await response.json();
         const errorMessage = data?.error || data?.details || "Request failed";
         throw new Error(errorMessage);
       }
 
-      const pipelineResult: PipelineResult = {
-        summary: data.summary || "",
-        confidence: data.confidence ?? 70,
-        validationFlags: data.validationFlags || [],
-        processingTime: data.processingTime || {
-          extraction: 0,
-          deduplication: 0,
-          synthesis: 0,
-          validation: 0,
-          total: 0,
-        },
-      };
+      // Handle Server-Sent Events stream
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("No response body");
+      }
 
-      setResult(pipelineResult);
-      setStep(3);
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete SSE events
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || ""; // Keep incomplete event in buffer
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const jsonStr = line.slice(6);
+            try {
+              const event = JSON.parse(jsonStr);
+
+              if (event.type === "progress") {
+                setCurrentPipelineStage(event.stage);
+              } else if (event.type === "complete") {
+                setCurrentPipelineStage("complete");
+                const pipelineResult: PipelineResult = {
+                  summary: event.result.summary || "",
+                  confidence: event.result.confidence ?? 70,
+                  validationFlags: event.result.validation_flags || [],
+                  processingTime: event.result.processingTime || {
+                    extraction: 0,
+                    deduplication: 0,
+                    synthesis: 0,
+                    validation: 0,
+                    total: 0,
+                  },
+                };
+                setResult(pipelineResult);
+                setStep(3);
+              } else if (event.type === "error") {
+                throw new Error(event.error || "Pipeline error");
+              }
+            } catch (parseErr) {
+              console.error("Failed to parse SSE event:", parseErr);
+            }
+          }
+        }
+      }
     } catch (err) {
       console.error(err);
       const errorMessage = err instanceof Error ? err.message : "Error generating notes. Please try again.";
       alert(`Error: ${errorMessage}`);
     } finally {
       setIsGenerating(false);
+      setCurrentPipelineStage(null);
     }
   };
 
@@ -227,7 +267,7 @@ export default function MeetingNotesApp() {
     <div className="min-h-screen bg-background">
       <main id="main-content" className="mx-auto max-w-3xl px-6 py-16" tabIndex={-1}>
         {activeSection === "scribe" ? (
-          <ScribeSection 
+          <ScribeSection
             step={step}
             setStep={setStep}
             transcript={transcript}
@@ -249,6 +289,7 @@ export default function MeetingNotesApp() {
             selectedTemplateId={selectedTemplateId}
             setSelectedTemplateId={setSelectedTemplateId}
             isGenerating={isGenerating}
+            currentPipelineStage={currentPipelineStage}
             result={result}
             handleFileUpload={handleFileUpload}
             generateNotes={generateNotes}
@@ -304,6 +345,7 @@ function ScribeSection({
   selectedTemplateId,
   setSelectedTemplateId,
   isGenerating,
+  currentPipelineStage,
   result,
   handleFileUpload,
   generateNotes,
@@ -331,6 +373,7 @@ function ScribeSection({
   selectedTemplateId: string;
   setSelectedTemplateId: (id: string) => void;
   isGenerating: boolean;
+  currentPipelineStage: "extraction" | "deduplication" | "synthesis" | "validation" | "complete" | null;
   result: PipelineResult | null;
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   generateNotes: () => Promise<void>;
@@ -444,7 +487,7 @@ function ScribeSection({
                   Processing your transcript through the pipeline
                 </p>
               </div>
-              <PipelineStatus />
+              <PipelineStatus currentStage={currentPipelineStage || undefined} />
             </div>
           ) : (
             <div className="space-y-12">

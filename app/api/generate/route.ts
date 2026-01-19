@@ -1,16 +1,15 @@
-import { NextResponse } from "next/server";
-import { 
-  executePipeline, 
+import {
+  executePipelineStreaming,
   getTimingBreakdown,
-  type PackageId, 
+  type PackageId,
   type PipelineStageConfig,
-  type GenerateResponse,
   type GenerateErrorResponse,
+  type StreamEvent,
 } from "@/lib/pipeline";
 import { getDictionary } from "@/lib/contacts/storage";
 
 // -----------------------------------------------------------------------------
-// API Route: POST /api/generate
+// API Route: POST /api/generate (Streaming)
 // -----------------------------------------------------------------------------
 
 export async function POST(req: Request) {
@@ -20,15 +19,18 @@ export async function POST(req: Request) {
       const errorResponse: GenerateErrorResponse = {
         error: "OpenRouter API key is not configured. Please set OPENROUTER_API_KEY in .env.local",
       };
-      return NextResponse.json(errorResponse, { status: 500 });
+      return new Response(JSON.stringify(errorResponse), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     // Parse request body
     const body = await req.json();
-    const { 
-      transcript, 
-      packageId = "BALANCED_PRO", 
-      customConfig, 
+    const {
+      transcript,
+      packageId = "BALANCED_PRO",
+      customConfig,
       templatePrompt = "",
       metadata,
     } = body as {
@@ -49,14 +51,20 @@ export async function POST(req: Request) {
       const errorResponse: GenerateErrorResponse = {
         error: "Missing transcript",
       };
-      return NextResponse.json(errorResponse, { status: 400 });
+      return new Response(JSON.stringify(errorResponse), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     if (typeof transcript !== "string" || transcript.trim().length < 20) {
       const errorResponse: GenerateErrorResponse = {
         error: "Transcript is too short or invalid",
       };
-      return NextResponse.json(errorResponse, { status: 400 });
+      return new Response(JSON.stringify(errorResponse), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     // Soft guardrail: ~1.5MB max
@@ -64,7 +72,10 @@ export async function POST(req: Request) {
       const errorResponse: GenerateErrorResponse = {
         error: "Transcript is too large. Split it into smaller chunks and try again.",
       };
-      return NextResponse.json(errorResponse, { status: 413 });
+      return new Response(JSON.stringify(errorResponse), {
+        status: 413,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     // Validate package ID
@@ -73,7 +84,10 @@ export async function POST(req: Request) {
       const errorResponse: GenerateErrorResponse = {
         error: `Invalid package ID. Must be one of: ${validPackages.join(", ")}`,
       };
-      return NextResponse.json(errorResponse, { status: 400 });
+      return new Response(JSON.stringify(errorResponse), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     // Validate custom config if using CUSTOM package
@@ -81,7 +95,10 @@ export async function POST(req: Request) {
       const errorResponse: GenerateErrorResponse = {
         error: "Custom configuration required when using CUSTOM package",
       };
-      return NextResponse.json(errorResponse, { status: 400 });
+      return new Response(JSON.stringify(errorResponse), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     // Fetch dictionary entries for transcription corrections
@@ -97,40 +114,60 @@ export async function POST(req: Request) {
       dictionary: dictionary.length > 0 ? dictionary : undefined,
     };
 
-    // Execute the pipeline
-    const result = await executePipeline(
-      transcript,
-      packageId,
-      templatePrompt,
-      customConfig,
-      {}, // pipeline options
-      enrichedMetadata
-    );
+    // Create a streaming response using Server-Sent Events
+    const encoder = new TextEncoder();
 
-    // Handle pipeline failure
-    if (!result.success || !result.summary) {
-      const errorResponse: GenerateErrorResponse = {
-        error: result.error || "Pipeline execution failed",
-        stage: result.stage_results.extraction?.success === false ? "extraction" :
-               result.stage_results.deduplication?.success === false ? "deduplication" :
-               result.stage_results.synthesis?.success === false ? "synthesis" :
-               result.stage_results.validation?.success === false ? "validation" : undefined,
-      };
-      return NextResponse.json(errorResponse, { status: 502 });
-    }
+    const stream = new ReadableStream({
+      async start(controller) {
+        const sendEvent = (event: StreamEvent) => {
+          const data = `data: ${JSON.stringify(event)}\n\n`;
+          controller.enqueue(encoder.encode(data));
+        };
 
-    // Get timing breakdown
-    const timing = getTimingBreakdown(result);
+        try {
+          const pipeline = executePipelineStreaming(
+            transcript,
+            packageId,
+            templatePrompt,
+            customConfig,
+            {},
+            enrichedMetadata
+          );
 
-    // Return successful response
-    const response: GenerateResponse = {
-      summary: result.summary,
-      confidence: result.confidence ?? 70,
-      validationFlags: result.validation_flags,
-      processingTime: timing,
-    };
+          for await (const event of pipeline) {
+            if (event.type === "complete") {
+              // Transform the complete event to include timing breakdown
+              const timing = getTimingBreakdown(event.result);
+              sendEvent({
+                type: "complete",
+                result: {
+                  ...event.result,
+                  processingTime: timing,
+                },
+              } as StreamEvent);
+            } else {
+              sendEvent(event);
+            }
+          }
+        } catch (error) {
+          console.error("Pipeline streaming error:", error);
+          sendEvent({
+            type: "error",
+            error: error instanceof Error ? error.message : "Unknown error",
+          });
+        } finally {
+          controller.close();
+        }
+      },
+    });
 
-    return NextResponse.json(response);
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
+    });
 
   } catch (error) {
     console.error("Generate API error:", error);
@@ -138,6 +175,9 @@ export async function POST(req: Request) {
       error: "Internal Server Error",
       details: error instanceof Error ? error.message : undefined,
     };
-    return NextResponse.json(errorResponse, { status: 500 });
+    return new Response(JSON.stringify(errorResponse), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }

@@ -232,6 +232,163 @@ export function getStageMessage(stage: PipelineProgress["currentStage"]): string
 }
 
 // -----------------------------------------------------------------------------
+// Streaming Pipeline Execution
+// -----------------------------------------------------------------------------
+
+export type StreamEvent =
+  | { type: "progress"; stage: PipelineProgress["currentStage"]; message: string }
+  | { type: "complete"; result: PipelineResult }
+  | { type: "error"; error: string; stage?: string };
+
+/**
+ * Execute the pipeline with streaming progress updates
+ *
+ * Yields progress events as each stage completes, keeping the connection alive
+ * and providing real-time feedback to the client.
+ */
+export async function* executePipelineStreaming(
+  transcript: string,
+  packageId: PackageId,
+  templatePrompt: string,
+  customConfig?: PipelineStageConfig,
+  options: PipelineOptions = {},
+  metadata?: MeetingMetadata
+): AsyncGenerator<StreamEvent> {
+  const startTime = Date.now();
+
+  // Get stage configuration
+  const stages = getStageConfig(packageId, customConfig);
+
+  // Initialize result structure
+  const result: PipelineResult = {
+    success: false,
+    summary: null,
+    confidence: null,
+    validation_flags: [],
+    stage_results: {
+      extraction: null,
+      deduplication: null,
+      synthesis: null,
+      validation: null,
+    },
+    total_duration_ms: 0,
+    error: null,
+  };
+
+  try {
+    // =========================================================================
+    // Stage 1: Extraction
+    // =========================================================================
+    yield { type: "progress", stage: "extraction", message: getStageMessage("extraction") };
+
+    console.log(`[Pipeline] Starting extraction with ${stages.extraction}`);
+    const extractionResult = await executeExtraction(transcript, stages.extraction, metadata);
+    result.stage_results.extraction = extractionResult;
+
+    if (!extractionResult.success || !extractionResult.data) {
+      result.error = `Extraction failed: ${extractionResult.error}`;
+      result.total_duration_ms = Date.now() - startTime;
+      yield { type: "error", error: result.error, stage: "extraction" };
+      return;
+    }
+    console.log(`[Pipeline] Extraction complete in ${extractionResult.duration_ms}ms`);
+
+    // =========================================================================
+    // Stage 1.5: Deduplication
+    // =========================================================================
+    yield { type: "progress", stage: "deduplication", message: getStageMessage("deduplication") };
+
+    const isSimpleMeeting =
+      extractionResult.data.decisions.length < 5 &&
+      extractionResult.data.commitments.length < 5;
+
+    console.log(`[Pipeline] Starting deduplication (simple: ${isSimpleMeeting})`);
+    const deduplicationResult = await executeDeduplication(
+      extractionResult.data,
+      isSimpleMeeting ? null : stages.extraction
+    );
+    result.stage_results.deduplication = deduplicationResult;
+
+    if (!deduplicationResult.success || !deduplicationResult.data) {
+      result.error = `Deduplication failed: ${deduplicationResult.error}`;
+      result.total_duration_ms = Date.now() - startTime;
+      yield { type: "error", error: result.error, stage: "deduplication" };
+      return;
+    }
+    console.log(`[Pipeline] Deduplication complete in ${deduplicationResult.duration_ms}ms`);
+
+    // =========================================================================
+    // Stage 2: Synthesis
+    // =========================================================================
+    yield { type: "progress", stage: "synthesis", message: getStageMessage("synthesis") };
+
+    console.log(`[Pipeline] Starting synthesis with ${stages.synthesis}`);
+    const synthesisResult = await executeSynthesis(
+      deduplicationResult.data,
+      stages.synthesis,
+      templatePrompt,
+      metadata
+    );
+    result.stage_results.synthesis = synthesisResult;
+
+    if (!synthesisResult.success || !synthesisResult.data) {
+      result.error = `Synthesis failed: ${synthesisResult.error}`;
+      result.total_duration_ms = Date.now() - startTime;
+      yield { type: "error", error: result.error, stage: "synthesis" };
+      return;
+    }
+    console.log(`[Pipeline] Synthesis complete in ${synthesisResult.duration_ms}ms`);
+
+    // At this point we have a summary - mark success
+    result.success = true;
+    result.summary = synthesisResult.data;
+
+    // =========================================================================
+    // Stage 3: Validation
+    // =========================================================================
+    const mustValidate = isValidationMandatory(stages);
+    const shouldSkipValidation = options.skipValidation && !mustValidate;
+
+    if (shouldSkipValidation) {
+      console.log(`[Pipeline] Skipping validation (optional)`);
+      result.confidence = 75;
+      result.total_duration_ms = Date.now() - startTime;
+      yield { type: "complete", result };
+      return;
+    }
+
+    yield { type: "progress", stage: "validation", message: getStageMessage("validation") };
+
+    console.log(`[Pipeline] Starting validation with ${stages.validation}`);
+    const validationResult = await executeValidation(
+      deduplicationResult.data,
+      synthesisResult.data,
+      stages.validation
+    );
+    result.stage_results.validation = validationResult;
+    console.log(`[Pipeline] Validation complete in ${validationResult.duration_ms}ms`);
+
+    if (!validationResult.success) {
+      console.warn(`[Pipeline] Validation failed: ${validationResult.error}`);
+      result.confidence = 70;
+    } else {
+      result.confidence = validationResult.data?.overall_confidence_score ?? 70;
+      result.validation_flags = validationResult.data?.flagged_issues ?? [];
+    }
+
+    result.total_duration_ms = Date.now() - startTime;
+    console.log(`[Pipeline] Complete in ${result.total_duration_ms}ms`);
+
+    yield { type: "complete", result };
+
+  } catch (error) {
+    result.error = error instanceof Error ? error.message : "Unknown pipeline error";
+    result.total_duration_ms = Date.now() - startTime;
+    yield { type: "error", error: result.error };
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Utility Functions
 // -----------------------------------------------------------------------------
 

@@ -59,12 +59,13 @@ export type { PipelineModelInfo } from "./packages";
 // Pipeline execution
 export {
   executePipeline,
+  executePipelineStreaming,
   executeValidationOnly,
   getStageMessage,
   calculateTotalTokens,
   getTimingBreakdown,
 } from "./executor";
-export type { PipelineStageStatus, PipelineProgress, PipelineOptions } from "./executor";
+export type { PipelineStageStatus, PipelineProgress, PipelineOptions, StreamEvent } from "./executor";
 
 // Individual stages (for advanced use)
 export { executeExtraction } from "./extraction";
